@@ -1,0 +1,11 @@
+transformers
+torch
+torchaudio
+sentencepiece
+language-tool-python
+openai-whisper
+ffmpeg-python
+deepl
+langdetect
+pyspellchecker
+requests
