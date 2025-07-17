@@ -11,6 +11,7 @@ from collections import Counter
 from magi_pipeline.utils.balthasar import Balthasar
 from magi_pipeline.utils.melchior import Melchior
 from magi_pipeline.utils.caspar import Caspar
+from magi_pipeline.utils.external_subs import find_external_subtitles, get_subtitle_preview
 try:
     from tqdm import tqdm
 except ImportError:
@@ -92,29 +93,152 @@ if video_file is None:
     raise FileNotFoundError("Не знайдено відеофайл у папці input/")
 
 subs_file = None
-probe = subprocess.run([
-    "ffmpeg", "-i", str(video_file)
-], stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-subtitle_streams = []
-for line in probe.stderr.splitlines():
-    if "Subtitle:" in line:
-        m = re.search(r'Stream #0:(\d+)(\((\w+)\))?: Subtitle: (\w+)( \((.*?)\))?', line)
-        if m:
-            stream_id = m.group(1)
-            lang = m.group(3) or "unknown"
-            fmt = m.group(4)
-            title = m.group(6) or ""
-            subtitle_streams.append({
-                "id": stream_id,
-                "lang": lang,
-                "fmt": fmt,
-                "title": title,
-                "raw": line.strip()
-            })
-if not subtitle_streams:
-    print("⚠️  Не знайдено потік сабів у відео!")
-    print("🔄 Переходимо до транскрибації аудіо...")
-    subs_file = None
+
+# Спочатку шукаємо зовнішні субтитри
+print("🔍 Пошук зовнішніх субтитрів...")
+# Шукаємо в кількох місцях: input директорія, підпапки Subs, Subtitles тощо
+search_dirs = [input_dir]
+
+# Додаємо популярні підпапки для субтитрів
+for subdir_name in ['Subs', 'Subtitles', 'Sub', 'subs', 'subtitles', 'sub']:
+    subdir = input_dir / subdir_name
+    if subdir.exists() and subdir.is_dir():
+        search_dirs.append(subdir)
+
+# Також шукаємо в директорії відеофайлу, якщо вона відрізняється від input
+video_dir = video_file.parent
+if video_dir != input_dir:
+    search_dirs.append(video_dir)
+
+external_subs = find_external_subtitles(video_file, search_dirs)
+
+if external_subs:
+    print(f"✅ Знайдено {len(external_subs)} зовнішніх файлів субтитрів:")
+    for idx, sub in enumerate(external_subs):
+        print(f"  [{idx}] {sub['name']} (мова: {sub['language']}, формат: {sub['format']}, рейтинг: {sub['match_score']:.1f})")
+        
+        # Показуємо превʼю
+        preview = get_subtitle_preview(sub['path'], 3)
+        if preview:
+            print(f"      Превʼю: {' | '.join(preview[:2])}")
+        print()
+    
+    # Запитуємо користувача чи використовувати зовнішні субтитри
+    use_external = input("Використати зовнішні субтитри? (y/n, за замовчуванням y): ").strip().lower()
+    
+    if use_external in ('', 'y', 'yes', 'так', 'т'):
+        if len(external_subs) == 1:
+            chosen_external = external_subs[0]
+            print(f"🎯 Автоматично вибрано: {chosen_external['name']}")
+        else:
+            chosen_idx = None
+            while chosen_idx is None or not (0 <= chosen_idx < len(external_subs)):
+                try:
+                    chosen_idx = int(input(f"Введіть номер файлу субтитрів (0-{len(external_subs)-1}): ").strip())
+                except ValueError:
+                    chosen_idx = None
+            chosen_external = external_subs[chosen_idx]
+        
+        print(f"✅ Вибрано зовнішні субтитри: {chosen_external['name']}")
+        subs_file = chosen_external['path']
+        
+        # Для зовнішніх субтитрів створюємо JSON з метаданими
+        if chosen_external['format'].lower() in ('srt', 'vtt', 'sub'):
+            # Для SRT та інших текстових форматів створюємо простий JSON
+            video_hash = get_file_hash(video_file)
+            sub_data = {
+                "meta": {
+                    "video_name": str(video_file),
+                    "video_hash": video_hash,
+                    "subtitle_file": str(subs_file),
+                    "subtitle_format": chosen_external['format'],
+                    "subtitle_language": chosen_external['language']
+                },
+                "dialogue": []
+            }
+            
+            # Читаємо весь текст субтитрів для подальшої обробки
+            try:
+                with open(subs_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except UnicodeDecodeError:
+                # Спробуємо інші кодування
+                for encoding in ['cp1251', 'latin1', 'cp1252']:
+                    try:
+                        with open(subs_file, 'r', encoding=encoding) as f:
+                            content = f.read()
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    raise Exception("Не вдалося прочитати файл субтитрів")
+            
+                         # Парсимо різні формати субтитрів
+             if chosen_external['format'].lower() == 'srt':
+                 from magi_pipeline.utils.srt_parser import parse_srt
+                 sub_data = parse_srt(subs_file)
+                 sub_data["meta"] = {
+                     "video_name": str(video_file),
+                     "video_hash": video_hash,
+                     "subtitle_file": str(subs_file),
+                     "subtitle_format": "srt",
+                     "subtitle_language": chosen_external['language']
+                 }
+             elif chosen_external['format'].lower() == 'vtt':
+                 from magi_pipeline.utils.vtt_parser import parse_vtt
+                 sub_data = parse_vtt(subs_file)
+                 sub_data["meta"] = {
+                     "video_name": str(video_file),
+                     "video_hash": video_hash,
+                     "subtitle_file": str(subs_file),
+                     "subtitle_format": "vtt",
+                     "subtitle_language": chosen_external['language']
+                 }
+            
+            with open(output_dir / "subs_source.json", "w", encoding="utf-8") as f:
+                json.dump(sub_data, f, ensure_ascii=False, indent=2)
+                
+        elif chosen_external['format'].lower() in ('ass', 'ssa'):
+            # Для ASS файлів використовуємо існуючий парсер
+            result = parse_ass(subs_file)
+            video_hash = get_file_hash(video_file)
+            if isinstance(result, dict):
+                result["meta"] = {
+                    "video_name": str(video_file), 
+                    "video_hash": video_hash,
+                    "subtitle_file": str(subs_file),
+                    "subtitle_format": chosen_external['format'],
+                    "subtitle_language": chosen_external['language']
+                }
+            with open(output_dir / "subs_source.json", "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+if subs_file is None:
+    # Якщо зовнішні субтитри не використовуються, шукаємо всередині відео
+    print("🔍 Пошук субтитрів всередині відеофайлу...")
+    probe = subprocess.run([
+        "ffmpeg", "-i", str(video_file)
+    ], stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    subtitle_streams = []
+    for line in probe.stderr.splitlines():
+        if "Subtitle:" in line:
+            m = re.search(r'Stream #0:(\d+)(\((\w+)\))?: Subtitle: (\w+)( \((.*?)\))?', line)
+            if m:
+                stream_id = m.group(1)
+                lang = m.group(3) or "unknown"
+                fmt = m.group(4)
+                title = m.group(6) or ""
+                subtitle_streams.append({
+                    "id": stream_id,
+                    "lang": lang,
+                    "fmt": fmt,
+                    "title": title,
+                    "raw": line.strip()
+                })
+    if not subtitle_streams:
+        print("⚠️  Не знайдено потік сабів у відео!")
+        print("🔄 Переходимо до транскрибації аудіо...")
+        subs_file = None
 else:
     print("Знайдено потоки сабів:")
     for idx, s in enumerate(subtitle_streams):
