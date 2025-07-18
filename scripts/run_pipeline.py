@@ -173,27 +173,27 @@ if external_subs:
                 else:
                     raise Exception("Не вдалося прочитати файл субтитрів")
             
-                         # Парсимо різні формати субтитрів
-             if chosen_external['format'].lower() == 'srt':
-                 from magi_pipeline.utils.srt_parser import parse_srt
-                 sub_data = parse_srt(subs_file)
-                 sub_data["meta"] = {
-                     "video_name": str(video_file),
-                     "video_hash": video_hash,
-                     "subtitle_file": str(subs_file),
-                     "subtitle_format": "srt",
-                     "subtitle_language": chosen_external['language']
-                 }
-             elif chosen_external['format'].lower() == 'vtt':
-                 from magi_pipeline.utils.vtt_parser import parse_vtt
-                 sub_data = parse_vtt(subs_file)
-                 sub_data["meta"] = {
-                     "video_name": str(video_file),
-                     "video_hash": video_hash,
-                     "subtitle_file": str(subs_file),
-                     "subtitle_format": "vtt",
-                     "subtitle_language": chosen_external['language']
-                 }
+            # Парсимо різні формати субтитрів
+            if chosen_external['format'].lower() == 'srt':
+                from magi_pipeline.utils.srt_parser import parse_srt
+                sub_data = parse_srt(subs_file)
+                sub_data["meta"] = {
+                    "video_name": str(video_file),
+                    "video_hash": video_hash,
+                    "subtitle_file": str(subs_file),
+                    "subtitle_format": "srt",
+                    "subtitle_language": chosen_external['language']
+                }
+            elif chosen_external['format'].lower() == 'vtt':
+                from magi_pipeline.utils.vtt_parser import parse_vtt
+                sub_data = parse_vtt(subs_file)
+                sub_data["meta"] = {
+                    "video_name": str(video_file),
+                    "video_hash": video_hash,
+                    "subtitle_file": str(subs_file),
+                    "subtitle_format": "vtt",
+                    "subtitle_language": chosen_external['language']
+                }
             
             with open(output_dir / "subs_source.json", "w", encoding="utf-8") as f:
                 json.dump(sub_data, f, ensure_ascii=False, indent=2)
