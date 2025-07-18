@@ -20,7 +20,26 @@ const stepComplete = document.getElementById('stepComplete');
 document.addEventListener('DOMContentLoaded', function() {
     initializeUploadArea();
     initializeFormHandlers();
+    initializeTranslationSettings();
 });
+
+/**
+ * Ініціалізація налаштувань перекладу
+ */
+function initializeTranslationSettings() {
+    const translationEngine = document.getElementById('translationEngine');
+    const deeplKeyGroup = document.getElementById('deeplKeyGroup');
+    
+    if (translationEngine && deeplKeyGroup) {
+        translationEngine.addEventListener('change', function() {
+            if (this.value === 'deepl') {
+                deeplKeyGroup.style.display = 'block';
+            } else {
+                deeplKeyGroup.style.display = 'none';
+            }
+        });
+    }
+}
 
 /**
  * Ініціалізація drag & drop для завантаження файлів
@@ -233,7 +252,7 @@ function populateAnalysisData(data) {
     
     // Заповнюємо стилі субтитрів
     if (data.subtitle_styles) {
-        const stylesContainer = document.getElementById('subtitleStyles');
+        const stylesContainer = document.getElementById('styleOptions');
         if (stylesContainer) {
             stylesContainer.innerHTML = '';
             data.subtitle_styles.forEach((style, index) => {
@@ -241,10 +260,24 @@ function populateAnalysisData(data) {
                 label.className = 'radio-item';
                 label.innerHTML = `
                     <input type="radio" name="subtitleStyle" value="${style.name}" ${index === 0 ? 'checked' : ''}>
-                    <span>${style.name}</span>
+                    <span>🎨 ${style.name}</span>
                 `;
                 stylesContainer.appendChild(label);
             });
+        }
+    }
+    
+    // Заповнюємо GPU інформацію
+    if (data.whisper_models) {
+        const gpuStatus = document.getElementById('gpuStatus');
+        if (gpuStatus) {
+            const gpu = data.whisper_models.gpu_available;
+            const memory = data.whisper_models.gpu_memory;
+            gpuStatus.innerHTML = `
+                <p><strong>🖥️ GPU:</strong> ${gpu ? '✅ Доступний' : '❌ Недоступний'}</p>
+                ${gpu ? `<p><strong>💾 Пам'ять:</strong> ${memory} MB</p>` : ''}
+                <p><strong>💡 Рекомендована модель:</strong> ${data.whisper_models.recommended}</p>
+            `;
         }
     }
 }
@@ -288,7 +321,7 @@ async function analyzeVideo(sessionId) {
         
         if (result.success) {
             displayAnalysisResults(result.analysis);
-            showStep('config');
+            showStep('3');
         } else {
             showError(result.error || 'Помилка аналізу відео');
         }
@@ -391,7 +424,7 @@ async function handleConfigSubmit(e) {
     config.session_id = currentSessionId;
     
     showSpinner('Запуск обробки...');
-    showStep('process');
+                showStep('5');
     
     try {
         const response = await fetch('/process', {
@@ -440,7 +473,7 @@ function startStatusChecking() {
             if (result.status === 'completed') {
                 isProcessing = false;
                 clearInterval(statusCheckInterval);
-                showStep('complete');
+                // Залишаємося на кроці 5, але показуємо результати
                 displayResults(result);
             } else if (result.status === 'error') {
                 isProcessing = false;
@@ -530,7 +563,41 @@ function proceedToConfiguration() {
     }
     
     console.log('✅ Вибрано джерело:', selectedSource.value);
+    
+    // Показуємо Whisper налаштування якщо обрано транскрибацію
+    if (selectedSource.value.startsWith('transcribe_')) {
+        const whisperSettings = document.getElementById('whisperSettings');
+        if (whisperSettings) {
+            whisperSettings.classList.remove('hidden');
+        }
+    }
+    
     showStep('3');  // step3 - налаштування
+}
+
+/**
+ * Перехід до вибору стилю
+ */
+function proceedToStyleSelection() {
+    console.log('📋 Переходимо до вибору стилю...');
+    showStep('4');  // step4 - стиль
+}
+
+/**
+ * Перехід до обробки
+ */
+function proceedToProcessing() {
+    console.log('📋 Переходимо до обробки...');
+    
+    // Перевіряємо чи вибрано стиль
+    const selectedStyle = document.querySelector('input[name="subtitleStyle"]:checked');
+    if (!selectedStyle) {
+        showError('Оберіть стиль субтитрів перед продовженням');
+        return;
+    }
+    
+    console.log('✅ Вибрано стиль:', selectedStyle.value);
+    showStep('5');  // step5 - обробка
 }
 
 /**
