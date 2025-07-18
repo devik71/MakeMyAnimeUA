@@ -93,4 +93,4 @@ downloads/
 *.ssa
 *.vtt
 !examples/*.srt
-!examples/*.ass
+!examples/*.ass*.pid
