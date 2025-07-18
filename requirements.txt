@@ -9,3 +9,5 @@ deepl
 langdetect
 pyspellchecker
 requests
+flask
+werkzeug
