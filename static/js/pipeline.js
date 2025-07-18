@@ -165,15 +165,15 @@ function populateAnalysisData(data) {
     }
     
     // Заповнюємо доступні моделі Whisper
-    if (data.whisper_models) {
+    if (data.whisper_models && data.whisper_models.models) {
         const whisperSelect = document.getElementById('whisperModel');
         if (whisperSelect) {
             whisperSelect.innerHTML = '';
-            data.whisper_models.forEach(model => {
+            data.whisper_models.models.forEach(model => {
                 const option = document.createElement('option');
                 option.value = model.name;
                 option.textContent = `${model.name} (${model.size})`;
-                if (model.recommended) option.selected = true;
+                if (model.name === data.whisper_models.recommended) option.selected = true;
                 whisperSelect.appendChild(option);
             });
         }
