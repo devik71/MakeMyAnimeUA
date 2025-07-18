@@ -162,19 +162,58 @@ function populateAnalysisData(data) {
         `;
     }
     
-    // Заповнюємо аудіо дорожки
-    const audioStreams = document.getElementById('audioStreams');
-    if (audioStreams && data.analysis && data.analysis.audio_streams) {
-        audioStreams.innerHTML = '';
-        data.analysis.audio_streams.forEach((stream, index) => {
-            const label = document.createElement('label');
-            label.className = 'radio-item';
-            label.innerHTML = `
-                <input type="radio" name="audioSource" value="audio_${index}" ${index === 0 ? 'checked' : ''}>
-                <span>🎵 Дорожка ${index + 1}: ${stream.language || 'невідома мова'} (${stream.codec || 'невідомий кодек'})</span>
-            `;
-            audioStreams.appendChild(label);
-        });
+    // Заповнюємо джерела субтитрів
+    const subtitleSources = document.getElementById('subtitleSources');
+    if (subtitleSources && data.analysis) {
+        subtitleSources.innerHTML = '';
+        let sourceIndex = 0;
+        
+        // Опція 1: Транскрибувати аудіо дорожки
+        if (data.analysis.audio_streams && data.analysis.audio_streams.length > 0) {
+            data.analysis.audio_streams.forEach((stream, index) => {
+                const label = document.createElement('label');
+                label.className = 'radio-item';
+                label.innerHTML = `
+                    <input type="radio" name="subtitleSource" value="transcribe_${index}" ${sourceIndex === 0 ? 'checked' : ''}>
+                    <span>🎤 Транскрибувати аудіо ${index + 1}: ${stream.language || 'невідома мова'} (${stream.codec})</span>
+                `;
+                subtitleSources.appendChild(label);
+                sourceIndex++;
+            });
+        }
+        
+        // Опція 2: Вбудовані субтитри
+        if (data.analysis.subtitle_streams && data.analysis.subtitle_streams.length > 0) {
+            data.analysis.subtitle_streams.forEach((stream, index) => {
+                const label = document.createElement('label');
+                label.className = 'radio-item';
+                label.innerHTML = `
+                    <input type="radio" name="subtitleSource" value="embedded_${index}" ${sourceIndex === 0 ? 'checked' : ''}>
+                    <span>📝 Вбудовані субтитри ${index + 1}: ${stream.language || 'невідома мова'}</span>
+                `;
+                subtitleSources.appendChild(label);
+                sourceIndex++;
+            });
+        }
+        
+        // Опція 3: Зовнішні субтитри
+        if (data.analysis.external_subtitles && data.analysis.external_subtitles.length > 0) {
+            data.analysis.external_subtitles.forEach((sub, index) => {
+                const label = document.createElement('label');
+                label.className = 'radio-item';
+                label.innerHTML = `
+                    <input type="radio" name="subtitleSource" value="external_${index}" ${sourceIndex === 0 ? 'checked' : ''}>
+                    <span>📁 Зовнішній файл: ${sub.filename}</span>
+                `;
+                subtitleSources.appendChild(label);
+                sourceIndex++;
+            });
+        }
+        
+        // Якщо немає жодного джерела, показуємо повідомлення
+        if (sourceIndex === 0) {
+            subtitleSources.innerHTML = '<p class="warning">⚠️ Не знайдено жодного джерела для субтитрів</p>';
+        }
     }
     
     // Заповнюємо доступні моделі Whisper
@@ -475,6 +514,23 @@ function displayResults(result) {
 function openEditor(editSessionId) {
     const editorUrl = `/editor?session=${editSessionId}&return_to=main_pipeline`;
     window.open(editorUrl, '_blank');
+}
+
+/**
+ * Перехід до налаштування перекладу
+ */
+function proceedToConfiguration() {
+    console.log('📋 Переходимо до налаштування перекладу...');
+    
+    // Перевіряємо чи вибрано джерело субтитрів
+    const selectedSource = document.querySelector('input[name="subtitleSource"]:checked');
+    if (!selectedSource) {
+        showError('Оберіть джерело субтитрів перед продовженням');
+        return;
+    }
+    
+    console.log('✅ Вибрано джерело:', selectedSource.value);
+    showStep('3');  // step3 - налаштування
 }
 
 /**
