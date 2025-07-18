@@ -35,10 +35,33 @@
 
 ## Вимоги
 
-Встановіть залежності з `requirements.txt`:
+**⚠️ Важливо:** Якщо виникають проблеми з установкою, дивіться файл `INSTALLATION_TROUBLESHOOTING.md`
 
-```
+### Швидка установка:
+```bash
 pip install -r requirements.txt
+```
+
+### Якщо виникають помилки, використовуйте:
+```bash
+pip install -r requirements_safe.txt
+```
+
+### Покрокова установка (рекомендовано):
+```bash
+# 1. Створіть віртуальне середовище
+python -m venv magi_env
+source magi_env/bin/activate  # Linux/macOS
+# або magi_env\Scripts\activate  # Windows
+
+# 2. Оновіть pip
+pip install --upgrade pip setuptools wheel
+
+# 3. Встановіть PyTorch
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# 4. Встановіть решту залежностей
+pip install -r requirements_safe.txt
 ```
 
 **Основні залежності:**
