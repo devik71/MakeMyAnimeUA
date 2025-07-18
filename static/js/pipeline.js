@@ -85,16 +85,32 @@ async function processFileUpload(file) {
     formData.append('video', file);
     
     try {
+        console.log('📤 Початок завантаження файлу:', file.name, 'Розмір:', file.size);
+        
         const response = await fetch('/upload_video', {
             method: 'POST',
             body: formData
         });
         
+        console.log('📡 Отримано відповідь від сервера:', response.status, response.statusText);
+        
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Помилка сервера:', errorText);
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
+        const contentType = response.headers.get('content-type');
+        console.log('📋 Content-Type:', contentType);
+        
+        if (!contentType || !contentType.includes('application/json')) {
+            const textResponse = await response.text();
+            console.error('❌ Сервер повернув не JSON:', textResponse.substring(0, 500));
+            throw new Error('Сервер повернув не JSON відповідь');
+        }
+        
         const result = await response.json();
+        console.log('✅ Отримано JSON:', result);
         
         if (result.error) {
             showError(result.error);
@@ -106,7 +122,9 @@ async function processFileUpload(file) {
         showStep('analysis');
         populateAnalysisData(result);
     } catch (error) {
-        showError('Помилка з\'єднання: ' + error.message);
+        console.error('❌ Детальна помилка завантаження:', error);
+        console.error('❌ Stack trace:', error.stack);
+        showError('Помилка завантаження: ' + error.message);
     } finally {
         hideSpinner();
     }

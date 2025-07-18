@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Upload</title>
+    <style>
+        body { background: #000; color: #ff8c00; font-family: Arial; padding: 20px; }
+        .upload { border: 2px dashed #00ff00; padding: 40px; text-align: center; cursor: pointer; }
+        .result { background: #1a1a1a; padding: 20px; margin: 20px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Test File Upload</h1>
+    <div class="upload" onclick="document.getElementById('file').click()">
+        Click to select video file
+        <input type="file" id="file" accept="video/*" style="display: none;">
+    </div>
+    <div id="status">Ready...</div>
+    <div id="result" class="result" style="display: none;"></div>
+    
+    <script>
+        document.getElementById('file').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('status').innerHTML = 'Uploading: ' + file.name;
+            
+            try {
+                const formData = new FormData();
+                formData.append('video', file);
+                
+                const response = await fetch('/upload_video', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                
+                const data = await response.json();
+                console.log('Data:', data);
+                
+                if (data.error) {
+                    document.getElementById('status').innerHTML = 'Error: ' + data.error;
+                } else {
+                    document.getElementById('status').innerHTML = 'Success!';
+                    document.getElementById('result').innerHTML = JSON.stringify(data, null, 2);
+                    document.getElementById('result').style.display = 'block';
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').innerHTML = 'Error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

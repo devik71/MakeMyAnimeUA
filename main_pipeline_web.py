@@ -176,6 +176,12 @@ def index():
     """Головна сторінка"""
     return render_template('main_pipeline.html')
 
+@app.route('/test')
+def test_upload():
+    """Тестова сторінка для діагностики завантаження"""
+    with open('test_upload.html', 'r') as f:
+        return f.read()
+
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
     """Завантаження відео файлу"""
