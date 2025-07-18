@@ -605,6 +605,15 @@
         // Ініціалізація
         document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
+            
+            // Відновлюємо стан сесії якщо повертаємось з редактора
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionFromUrl = urlParams.get('session');
+            if (sessionFromUrl) {
+                currentSessionId = sessionFromUrl;
+                console.log('🔄 Відновлено сесію:', sessionFromUrl);
+                restoreSessionState();
+            }
         });
 
         function setupEventListeners() {
@@ -1032,7 +1041,13 @@
         }
 
         function editTranslation() {
-            window.open('/edit_translation', '_blank');
+            if (!currentSessionId) {
+                alert('Помилка: не знайдено ID сесії');
+                return;
+            }
+            
+            // Відкриваємо редактор з session_id
+            window.open(`/editor?session=${currentSessionId}`, '_blank');
         }
 
         function continueProcessing() {
@@ -1060,6 +1075,28 @@
 
         function downloadSubtitles() {
             window.location.href = '/download_subtitles';
+        }
+        
+        async function restoreSessionState() {
+            if (!currentSessionId) return;
+            
+            try {
+                console.log('🔄 Відновлюємо стан сесії...');
+                
+                // Можемо відразу показати крок 5 з опціями редагування
+                showStep('5');
+                
+                // Показуємо блок з завершеним перекладом
+                const translationComplete = document.getElementById('translationComplete');
+                if (translationComplete) {
+                    translationComplete.classList.remove('hidden');
+                }
+                
+                console.log('✅ Стан сесії відновлено');
+                
+            } catch (error) {
+                console.error('❌ Помилка відновлення стану:', error);
+            }
         }
     </script>
     

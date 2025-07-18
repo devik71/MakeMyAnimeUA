@@ -175,7 +175,15 @@ def get_available_subtitle_styles():
 def index():
     """Головна сторінка"""
     import time
-    return render_template('main_pipeline.html', timestamp=int(time.time()))
+    session_id = request.args.get('session')
+    
+    # Якщо передано session_id, відновлюємо сесію
+    if session_id and session_id in processing_sessions:
+        session['session_id'] = session_id
+    
+    return render_template('main_pipeline.html', 
+                         timestamp=int(time.time()),
+                         session_id=session_id)
 
 @app.route('/test')
 def test_upload():
@@ -466,6 +474,71 @@ def edit_translation():
     
     # Передаємо session_id редактору
     return redirect(f"/editor?session={session_id}")
+
+@app.route('/editor')
+def translation_editor():
+    """Редактор перекладу"""
+    import time
+    session_id = request.args.get('session')
+    
+    if not session_id or session_id not in processing_sessions:
+        return redirect(url_for('index'))
+    
+    session_data = processing_sessions[session_id]
+    translation_path = session_data.get('translation_path')
+    
+    if not translation_path or not Path(translation_path).exists():
+        return redirect(url_for('index'))
+    
+    return render_template('translation_editor.html', 
+                         session_id=session_id, 
+                         timestamp=int(time.time()))
+
+@app.route('/api/translation/<session_id>')
+def get_translation_data(session_id):
+    """API для отримання даних перекладу"""
+    if session_id not in processing_sessions:
+        return jsonify({"error": "Сесія не знайдена"}), 404
+    
+    session_data = processing_sessions[session_id]
+    translation_path = session_data.get('translation_path')
+    
+    if not translation_path or not Path(translation_path).exists():
+        return jsonify({"error": "Файл перекладу не знайдено"}), 404
+    
+    try:
+        with open(translation_path, 'r', encoding='utf-8') as f:
+            translation_data = json.load(f)
+        return jsonify(translation_data)
+    except Exception as e:
+        return jsonify({"error": f"Помилка читання файлу: {str(e)}"}), 500
+
+@app.route('/api/translation/<session_id>', methods=['POST'])
+def save_translation_data(session_id):
+    """API для збереження змін перекладу"""
+    if session_id not in processing_sessions:
+        return jsonify({"error": "Сесія не знайдена"}), 404
+    
+    session_data = processing_sessions[session_id]
+    translation_path = session_data.get('translation_path')
+    
+    if not translation_path:
+        return jsonify({"error": "Файл перекладу не знайдено"}), 404
+    
+    try:
+        data = request.get_json()
+        if not data or 'segments' not in data:
+            return jsonify({"error": "Невірний формат даних"}), 400
+        
+        # Оновлюємо timestamp
+        data['meta']['updated_at'] = datetime.now().isoformat()
+        
+        with open(translation_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({"success": True, "message": "Переклад збережено"})
+    except Exception as e:
+        return jsonify({"error": f"Помилка збереження: {str(e)}"}), 500
 
 @app.route('/continue_processing', methods=['POST'])
 def continue_processing():

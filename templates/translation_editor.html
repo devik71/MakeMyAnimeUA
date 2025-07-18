@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📝 Редактор перекладу — MakeMyAnimeUA</title>
+    <style>
+        :root {
+            --primary-color: #000000;
+            --secondary-color: #1a1a1a;
+            --accent-color: #00ff00;
+            --text-color: #ff8c00;
+            --text-secondary: #ff9933;
+            --success-color: #00ff00;
+            --warning-color: #ffaa00;
+            --error-color: #ff6b6b;
+            --border-color: #333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--primary-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: var(--secondary-color);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header h1 {
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: var(--accent-color);
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #00cc00;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--secondary-color);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .segment-list {
+            background: var(--secondary-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .segment-item {
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .segment-item:last-child {
+            border-bottom: none;
+        }
+
+        .segment-time {
+            font-family: monospace;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+
+        .segment-text {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .text-original, .text-translated {
+            padding: 10px;
+            border-radius: 5px;
+            background: var(--primary-color);
+            border: 1px solid var(--border-color);
+            resize: vertical;
+            min-height: 60px;
+            font-family: inherit;
+            color: var(--text-color);
+            width: 100%;
+        }
+
+        .text-original {
+            background: rgba(255, 140, 0, 0.1);
+            border-color: var(--text-color);
+        }
+
+        .text-translated {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: var(--accent-color);
+        }
+
+        .text-translated:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2);
+        }
+
+        .segment-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 0.8em;
+            min-width: auto;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .error {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .search-bar {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 10px;
+            background: var(--primary-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-color);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        @media (max-width: 768px) {
+            .segment-item {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .header-actions {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📝 Редактор перекладу</h1>
+                <p>Редагуйте переклад субтитрів та збережіть зміни</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="saveChanges()">💾 Зберегти зміни</button>
+                <button class="btn btn-secondary" onclick="returnToPipeline()">🔙 Повернутись до пайплайну</button>
+                <a href="/editor?session={{ session_id }}" class="btn btn-secondary">🔄 Оновити</a>
+            </div>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalSegments">-</div>
+                <div>Всього сегментів</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="editedSegments">0</div>
+                <div>Відредаговано</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="progressPercent">0%</div>
+                <div>Прогрес</div>
+            </div>
+        </div>
+
+        <div class="search-bar">
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Пошук в перекладі...">
+            <button class="btn btn-small" onclick="clearSearch()">✖ Очистити</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <p>⏳ Завантаження перекладу...</p>
+        </div>
+
+        <div class="segment-list" id="segmentList"></div>
+    </div>
+
+    <script>
+        const sessionId = '{{ session_id }}';
+        let translationData = null;
+        let editedSegments = new Set();
+
+        // Завантаження даних при старті
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTranslationData();
+            setupSearch();
+        });
+
+        async function loadTranslationData() {
+            const loading = document.getElementById('loading');
+            const segmentList = document.getElementById('segmentList');
+            
+            loading.style.display = 'block';
+            segmentList.style.display = 'none';
+
+            try {
+                const response = await fetch(`/api/translation/${sessionId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                translationData = await response.json();
+                console.log('✅ Дані перекладу завантажено:', translationData);
+                
+                renderSegments();
+                updateStats();
+                
+            } catch (error) {
+                console.error('❌ Помилка завантаження:', error);
+                showMessage(`Помилка завантаження: ${error.message}`, 'error');
+            } finally {
+                loading.style.display = 'none';
+                segmentList.style.display = 'block';
+            }
+        }
+
+        function renderSegments(filter = '') {
+            const segmentList = document.getElementById('segmentList');
+            
+            if (!translationData || !translationData.segments) {
+                segmentList.innerHTML = '<p style="padding: 20px; text-align: center;">Немає даних для відображення</p>';
+                return;
+            }
+
+            const segments = translationData.segments.filter(segment => {
+                if (!filter) return true;
+                return segment.original.toLowerCase().includes(filter.toLowerCase()) ||
+                       segment.translated.toLowerCase().includes(filter.toLowerCase());
+            });
+
+            segmentList.innerHTML = '';
+
+            segments.forEach((segment, index) => {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment-item';
+                segmentDiv.innerHTML = `
+                    <div class="segment-time">
+                        ${formatTime(segment.start)} →<br>
+                        ${formatTime(segment.end)}
+                    </div>
+                    <div class="segment-text">
+                        <label>Оригінал:</label>
+                        <textarea class="text-original" readonly>${segment.original}</textarea>
+                        <label>Переклад:</label>
+                        <textarea class="text-translated" data-index="${index}" 
+                                  onchange="markAsEdited(${index})">${segment.translated}</textarea>
+                    </div>
+                    <div class="segment-actions">
+                        <button class="btn btn-small" onclick="resetTranslation(${index})">🔄 Скинути</button>
+                        <button class="btn btn-small" onclick="copyOriginal(${index})">📋 Копіювати оригінал</button>
+                    </div>
+                `;
+                segmentList.appendChild(segmentDiv);
+            });
+        }
+
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 1000);
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+            }
+            return `${minutes}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        }
+
+        function markAsEdited(index) {
+            editedSegments.add(index);
+            
+            const textarea = document.querySelector(`[data-index="${index}"]`);
+            if (textarea) {
+                translationData.segments[index].translated = textarea.value;
+            }
+            
+            updateStats();
+        }
+
+        function resetTranslation(index) {
+            // Скидає переклад до початкового стану (потребує збереженого оригінального перекладу)
+            const textarea = document.querySelector(`[data-index="${index}"]`);
+            if (textarea && confirm('Скинути переклад цього сегменту?')) {
+                // Тут можна було б завантажити оригінальний переклад з сервера
+                editedSegments.delete(index);
+                updateStats();
+            }
+        }
+
+        function copyOriginal(index) {
+            const originalTextarea = document.querySelectorAll('.text-original')[index];
+            const translatedTextarea = document.querySelector(`[data-index="${index}"]`);
+            
+            if (originalTextarea && translatedTextarea) {
+                translatedTextarea.value = originalTextarea.value;
+                markAsEdited(index);
+            }
+        }
+
+        function updateStats() {
+            const totalSegments = translationData ? translationData.segments.length : 0;
+            const edited = editedSegments.size;
+            const progress = totalSegments > 0 ? Math.round((edited / totalSegments) * 100) : 0;
+
+            document.getElementById('totalSegments').textContent = totalSegments;
+            document.getElementById('editedSegments').textContent = edited;
+            document.getElementById('progressPercent').textContent = `${progress}%`;
+        }
+
+        function setupSearch() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', function() {
+                renderSegments(this.value);
+            });
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.value = '';
+            renderSegments();
+        }
+
+        async function saveChanges() {
+            if (!translationData) {
+                showMessage('Немає даних для збереження', 'error');
+                return;
+            }
+
+            try {
+                showMessage('💾 Збереження змін...', 'info');
+
+                const response = await fetch(`/api/translation/${sessionId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(translationData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('✅ Зміни збережено успішно!', 'success');
+                    editedSegments.clear();
+                    updateStats();
+                } else {
+                    throw new Error(result.error || 'Помилка збереження');
+                }
+
+            } catch (error) {
+                console.error('❌ Помилка збереження:', error);
+                showMessage(`Помилка збереження: ${error.message}`, 'error');
+            }
+        }
+
+        function returnToPipeline() {
+            if (editedSegments.size > 0) {
+                if (!confirm('У вас є незбережені зміни. Ви впевнені, що хочете повернутись?')) {
+                    return;
+                }
+            }
+            
+            // Повертаємося до головного пайплайну
+            window.location.href = `/?session=${sessionId}`;
+        }
+
+        function showMessage(text, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Попередження про незбережені зміни при закритті
+        window.addEventListener('beforeunload', function(e) {
+            if (editedSegments.size > 0) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>
