@@ -119,7 +119,7 @@ async function processFileUpload(file) {
         
         // Успішне завантаження
         currentSessionId = result.session_id;
-        showStep('analysis');
+        showStep('2');  // step2 - аналіз
         populateAnalysisData(result);
     } catch (error) {
         console.error('❌ Детальна помилка завантаження:', error);
@@ -134,34 +134,39 @@ async function processFileUpload(file) {
  * Заповнення даних аналізу
  */
 function populateAnalysisData(data) {
+    console.log('📊 Заповнюємо дані аналізу:', data);
+    
+    // Показуємо контент аналізу
+    const analysisContent = document.getElementById('analysisContent');
+    if (analysisContent) {
+        analysisContent.classList.remove('hidden');
+        console.log('✅ Показано analysisContent');
+    }
+    
     // Заповнюємо інформацію про відео
-    const analysisContainer = document.getElementById('analysisResults');
-    if (analysisContainer && data.analysis) {
-        let html = '<h3>📊 Аналіз відео:</h3>';
-        
-        if (data.analysis.video_info) {
-            const info = data.analysis.video_info;
-            html += `<p><strong>Тривалість:</strong> ${info.duration || 'Невідомо'}</p>`;
-            html += `<p><strong>Розмір:</strong> ${info.size || 'Невідомо'}</p>`;
-        }
-        
-        if (data.analysis.audio_streams && data.analysis.audio_streams.length > 0) {
-            html += '<h4>🎵 Аудіо дорожки:</h4><ul>';
-            data.analysis.audio_streams.forEach((stream, index) => {
-                html += `<li>Дорожка ${index}: ${stream.language || 'невідома мова'} (${stream.codec || 'невідомий кодек'})</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        if (data.analysis.subtitle_streams && data.analysis.subtitle_streams.length > 0) {
-            html += '<h4>📝 Субтитри:</h4><ul>';
-            data.analysis.subtitle_streams.forEach((stream, index) => {
-                html += `<li>Субтитри ${index}: ${stream.language || 'невідома мова'}</li>`;
-            });
-            html += '</ul>';
-        }
-        
-        analysisContainer.innerHTML = html;
+    const videoInfo = document.getElementById('videoInfo');
+    if (videoInfo && data.analysis && data.analysis.video_info) {
+        const info = data.analysis.video_info;
+        const sizeInMB = info.size ? (info.size / 1024 / 1024).toFixed(2) + ' MB' : 'Невідомо';
+        videoInfo.innerHTML = `
+            <p><strong>📁 Файл:</strong> ${info.filename || 'Невідомо'}</p>
+            <p><strong>📊 Розмір:</strong> ${sizeInMB}</p>
+        `;
+    }
+    
+    // Заповнюємо аудіо дорожки
+    const audioStreams = document.getElementById('audioStreams');
+    if (audioStreams && data.analysis && data.analysis.audio_streams) {
+        audioStreams.innerHTML = '';
+        data.analysis.audio_streams.forEach((stream, index) => {
+            const label = document.createElement('label');
+            label.className = 'radio-item';
+            label.innerHTML = `
+                <input type="radio" name="audioSource" value="audio_${index}" ${index === 0 ? 'checked' : ''}>
+                <span>🎵 Дорожка ${index + 1}: ${stream.language || 'невідома мова'} (${stream.codec || 'невідомий кодек'})</span>
+            `;
+            audioStreams.appendChild(label);
+        });
     }
     
     // Заповнюємо доступні моделі Whisper
@@ -467,17 +472,32 @@ function openEditor(editSessionId) {
 /**
  * Управління кроками
  */
-function showStep(stepName) {
+function showStep(stepNumber) {
+    console.log('📋 Показуємо крок:', stepNumber);
+    
     // Сховати всі кроки
-    [stepUpload, stepAnalysis, stepConfig, stepProcess, stepComplete].forEach(step => {
-        if (step) step.style.display = 'none';
-    });
+    for (let i = 1; i <= 5; i++) {
+        const step = document.getElementById(`step${i}`);
+        if (step) {
+            step.style.display = 'none';
+            step.classList.remove('active');
+            step.classList.add('disabled');
+        }
+    }
     
     // Показати потрібний крок
-    const targetStep = document.getElementById(`step${stepName.charAt(0).toUpperCase() + stepName.slice(1)}`);
+    const targetStepId = `step${stepNumber}`;
+    console.log('🔍 Шукаємо елемент з ID:', targetStepId);
+    
+    const targetStep = document.getElementById(targetStepId);
     if (targetStep) {
+        console.log('✅ Елемент знайдено, показуємо крок');
         targetStep.style.display = 'block';
+        targetStep.classList.remove('disabled');
+        targetStep.classList.add('active');
         targetStep.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        console.error('❌ Елемент не знайдено:', targetStepId);
     }
 }
 
