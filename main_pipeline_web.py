@@ -174,7 +174,8 @@ def get_available_subtitle_styles():
 @app.route('/')
 def index():
     """Головна сторінка"""
-    return render_template('main_pipeline.html')
+    import time
+    return render_template('main_pipeline.html', timestamp=int(time.time()))
 
 @app.route('/test')
 def test_upload():

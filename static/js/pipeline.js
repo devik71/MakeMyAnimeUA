@@ -113,13 +113,21 @@ async function processFileUpload(file) {
         console.log('✅ Отримано JSON:', result);
         
         if (result.error) {
+            console.log('❌ Знайдено помилку в result:', result.error);
             showError(result.error);
             return;
         }
         
         // Успішне завантаження
+        console.log('🚀 Починаємо обробку успішного завантаження...');
+        console.log('📋 Session ID:', result.session_id);
+        
         currentSessionId = result.session_id;
+        
+        console.log('📋 Викликаємо showStep(2)...');
         showStep('2');  // step2 - аналіз
+        
+        console.log('📊 Викликаємо populateAnalysisData...');
         populateAnalysisData(result);
     } catch (error) {
         console.error('❌ Детальна помилка завантаження:', error);
@@ -549,4 +557,4 @@ function showSuccess(message) {
         `;
         errorContainer.style.display = 'block';
     }
-}
+}console.log('🕐 JavaScript файл завантажено:', new Date().toISOString());
