@@ -1,48 +1,45 @@
+"""
+external_subs.py — пошук та аналіз зовнішніх субтитрів
+"""
+
 import os
 import re
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
-
-def find_external_subtitles(video_file: Path, search_dirs: List[Path] = None) -> List[Dict]:
+def find_external_subtitles(video_path: Path, search_dirs: List[Path]) -> List[Dict]:
     """
-    Пошук зовнішніх файлів субтитрів для відеофайлу.
+    Знаходить зовнішні файли субтитрів для відеофайлу
     
     Args:
-        video_file: Шлях до відеофайлу
-        search_dirs: Список директорій для пошуку (якщо не вказано, шукає в директорії відео)
+        video_path: Шлях до відеофайлу
+        search_dirs: Директорії для пошуку
     
     Returns:
-        Список знайдених файлів субтитрів з метаданими
+        Список знайдених субтитрів з метаданими
     """
-    if search_dirs is None:
-        search_dirs = [video_file.parent]
-    
-    video_name = video_file.stem.lower()
-    subtitle_extensions = ['.srt', '.ass', '.ssa', '.vtt', '.sub', '.sbv']
-    
+    video_name = video_path.stem
+    subtitle_extensions = ['.srt', '.ass', '.ssa', '.vtt', '.sub']
     found_subtitles = []
     
     for search_dir in search_dirs:
         if not search_dir.exists():
             continue
             
-        # Пошук файлів з розширеннями субтитрів
-        for ext in subtitle_extensions:
-            pattern = f"*{ext}"
-            for sub_file in search_dir.glob(pattern):
-                sub_name = sub_file.stem.lower()
+        # Шукаємо файли субтитрів
+        for sub_file in search_dir.rglob("*"):
+            if sub_file.suffix.lower() in subtitle_extensions:
+                match_score = calculate_name_similarity(video_name, sub_file.stem)
                 
-                # Перевіряємо чи назва субтитрів відповідає відео
-                if is_subtitle_match(video_name, sub_name):
-                    lang = extract_language_from_filename(sub_name)
+                if match_score > 0.3:  # Мінімальний поріг схожості
+                    language = detect_subtitle_language(sub_file)
                     
                     found_subtitles.append({
-                        'path': sub_file,
+                        'path': str(sub_file),
                         'name': sub_file.name,
-                        'language': lang,
-                        'format': ext[1:],  # без крапки
-                        'match_score': calculate_match_score(video_name, sub_name),
+                        'format': sub_file.suffix[1:].upper(),
+                        'language': language,
+                        'match_score': match_score,
                         'size': sub_file.stat().st_size
                     })
     
@@ -51,249 +48,193 @@ def find_external_subtitles(video_file: Path, search_dirs: List[Path] = None) ->
     
     return found_subtitles
 
-
-def is_subtitle_match(video_name: str, subtitle_name: str) -> bool:
+def calculate_name_similarity(video_name: str, subtitle_name: str) -> float:
     """
-    Перевіряє чи відповідає файл субтитрів відеофайлу.
-    """
-    # Видаляємо загальні суфікси
-    video_clean = clean_filename(video_name)
-    sub_clean = clean_filename(subtitle_name)
+    Обчислює схожість назв відеофайлу та субтитрів
     
-    # Точна відповідність
-    if video_clean == sub_clean:
-        return True
+    Args:
+        video_name: Назва відеофайлу (без розширення)
+        subtitle_name: Назва файлу субтитрів (без розширення)
+    
+    Returns:
+        Оцінка схожості від 0 до 1
+    """
+    # Нормалізуємо назви
+    video_clean = normalize_filename(video_name)
+    subtitle_clean = normalize_filename(subtitle_name)
+    
+    # Точне співпадіння
+    if video_clean == subtitle_clean:
+        return 1.0
     
     # Субтитри містять назву відео
-    if video_clean in sub_clean:
-        return True
+    if video_clean in subtitle_clean:
+        return 0.9
     
-    # Відео містить назву субтитрів (коротші субтитри)
-    if sub_clean in video_clean and len(sub_clean) > 3:
-        return True
+    # Відео містить назву субтитрів
+    if subtitle_clean in video_clean:
+        return 0.8
     
-    # Схожість за словами
-    video_words = set(re.findall(r'\w+', video_clean))
-    sub_words = set(re.findall(r'\w+', sub_clean))
+    # Порівняння слів
+    video_words = set(video_clean.split())
+    subtitle_words = set(subtitle_clean.split())
     
-    if video_words and sub_words:
-        common_words = video_words.intersection(sub_words)
-        similarity = len(common_words) / max(len(video_words), len(sub_words))
-        return similarity > 0.6
-    
-    return False
-
-
-def clean_filename(filename: str) -> str:
-    """
-    Очищає назву файлу від загальних суфіксів та префіксів.
-    """
-    result = filename.lower()
-    
-    # Видаляємо розширення файлів
-    result = re.sub(r'\.(mkv|mp4|avi|mov|srt|ass|ssa|vtt|sub|sbv)$', '', result)
-    
-    # Видаляємо загальні суфікси якості та кодування
-    patterns_to_remove = [
-        r'\.\d{4}',  # .2023, .2024
-        r'\.(720p|1080p|4k|uhd)',
-        r'\.(web-?dl|webrip|brrip|dvdrip|bluray)',
-        r'\.(x264|x265|h264|h265)',
-        r'\.(ukrainian|english|russian|french|german)',
-        r'\.(ua|en|ru|uk|fr|de|es|it|pl|cz|sk)',
-        r'-\w+$'  # Видаляємо кінцеві теги релізних груп
-    ]
-    
-    for pattern in patterns_to_remove:
-        result = re.sub(pattern, '', result, flags=re.IGNORECASE)
-    
-    # Заміняємо роздільники на пробіли
-    result = re.sub(r'[._\-]+', ' ', result)
-    
-    # Видаляємо зайві пробіли
-    result = re.sub(r'\s+', ' ', result).strip()
-    
-    return result
-
-
-def extract_language_from_filename(filename: str) -> str:
-    """
-    Витягує мову з назви файлу субтитрів.
-    """
-    filename_lower = filename.lower()
-    
-    # Словник мов
-    languages = {
-        'ua': 'ukrainian',
-        'uk': 'ukrainian', 
-        'ukr': 'ukrainian',
-        'ukrainian': 'ukrainian',
-        'en': 'english',
-        'eng': 'english',
-        'english': 'english',
-        'ru': 'russian',
-        'rus': 'russian',
-        'russian': 'russian',
-        'fr': 'french',
-        'de': 'german',
-        'es': 'spanish',
-        'it': 'italian',
-        'pl': 'polish',
-        'cz': 'czech',
-        'sk': 'slovak'
-    }
-    
-    # Шукаємо мову в назві файлу
-    for code, lang in languages.items():
-        patterns = [
-            rf'\.{code}$',          # film.ua
-            rf'\.{code}\.',         # film.ua.srt
-            rf'_{code}_',           # film_ua_HD
-            rf'_{code}$',           # film_ua
-            rf'_{code}\.',          # film_ua.srt
-            rf'-{code}-',           # film-ua-HD
-            rf'-{code}$',           # film-ua  
-            rf'-{code}\.',          # film-ua.srt
-            rf'\b{code}\b'          # загальний випадок
-        ]
+    if video_words and subtitle_words:
+        common_words = video_words.intersection(subtitle_words)
+        total_words = video_words.union(subtitle_words)
+        similarity = len(common_words) / len(total_words)
         
-        for pattern in patterns:
-            if re.search(pattern, filename_lower):
-                return lang
-    
-    return 'unknown'
-
-
-def calculate_match_score(video_name: str, subtitle_name: str) -> float:
-    """
-    Розраховує рейтинг відповідності субтитрів до відео (0-100).
-    """
-    video_clean = clean_filename(video_name)
-    sub_clean = clean_filename(subtitle_name)
-    
-    # Точна відповідність
-    if video_clean == sub_clean:
-        return 100.0
-    
-    # Один файл містить інший
-    if video_clean in sub_clean:
-        return 90.0
-    if sub_clean in video_clean and len(sub_clean) > 3:
-        return 85.0
-    
-    # Схожість за словами
-    video_words = set(re.findall(r'\w+', video_clean))
-    sub_words = set(re.findall(r'\w+', sub_clean))
-    
-    if video_words and sub_words:
-        common_words = video_words.intersection(sub_words)
-        word_similarity = len(common_words) / max(len(video_words), len(sub_words))
-        return word_similarity * 80
+        # Бонус за довгі спільні послідовності
+        if similarity > 0.5:
+            return min(0.85, similarity + 0.2)
+        return similarity
     
     return 0.0
 
-
-def get_subtitle_preview(subtitle_file: Path, max_lines: int = 20) -> List[str]:
+def normalize_filename(filename: str) -> str:
     """
-    Отримує превʼю перших рядків субтитрів для перевірки.
+    Нормалізує назву файлу для порівняння
     """
-    lines = []
+    # Видаляємо розширення та зайві символи
+    filename = re.sub(r'\[.*?\]', '', filename)  # [1080p], [rus], etc.
+    filename = re.sub(r'\(.*?\)', '', filename)  # (2023), (HDTV), etc.
+    filename = re.sub(r'[._-]+', ' ', filename)  # Замінюємо роздільники на пробіли
+    filename = re.sub(r'\s+', ' ', filename)     # Множинні пробіли на одинарні
     
+    return filename.lower().strip()
+
+def detect_subtitle_language(subtitle_path: Path) -> str:
+    """
+    Визначає мову субтитрів на основі назви файлу та вмісту
+    
+    Args:
+        subtitle_path: Шлях до файлу субтитрів
+    
+    Returns:
+        Код мови або 'unknown'
+    """
+    filename = subtitle_path.name.lower()
+    
+    # Коди мов у назві файлу
+    language_patterns = {
+        'ru': [r'\bru\b', r'\brussian\b', r'\bрус\b'],
+        'en': [r'\ben\b', r'\benglish\b', r'\beng\b'],
+        'uk': [r'\bukr\b', r'\bukrainian\b', r'\bukr\b'],
+        'ja': [r'\bjap\b', r'\bjapanese\b', r'\bjpn\b'],
+        'de': [r'\bger\b', r'\bgerman\b', r'\bde\b'],
+        'fr': [r'\bfra\b', r'\bfrench\b', r'\bfr\b'],
+        'es': [r'\besp\b', r'\bspanish\b', r'\bes\b'],
+    }
+    
+    for lang_code, patterns in language_patterns.items():
+        for pattern in patterns:
+            if re.search(pattern, filename):
+                return lang_code
+    
+    # Аналіз вмісту (перші кілька рядків)
     try:
-        with open(subtitle_file, 'r', encoding='utf-8') as f:
-            content = f.read()
+        detected_lang = detect_language_from_content(subtitle_path)
+        if detected_lang:
+            return detected_lang
+    except:
+        pass
+    
+    return 'unknown'
+
+def detect_language_from_content(subtitle_path: Path) -> Optional[str]:
+    """
+    Визначає мову на основі вмісту субтитрів
+    """
+    try:
+        # Читаємо перші 1000 символів
+        with open(subtitle_path, 'r', encoding='utf-8') as f:
+            content = f.read(1000)
     except UnicodeDecodeError:
-        # Спробуємо інші кодування
+        # Пробуємо інші кодування
         for encoding in ['cp1251', 'latin1', 'cp1252']:
             try:
-                with open(subtitle_file, 'r', encoding=encoding) as f:
+                with open(subtitle_path, 'r', encoding=encoding) as f:
+                    content = f.read(1000)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            return None
+    
+    # Простий аналіз на основі характерних символів
+    cyrillic_count = len(re.findall(r'[а-яё]', content, re.IGNORECASE))
+    latin_count = len(re.findall(r'[a-z]', content, re.IGNORECASE))
+    ukrainian_chars = len(re.findall(r'[ґєіїє]', content, re.IGNORECASE))
+    
+    total_chars = cyrillic_count + latin_count
+    
+    if total_chars == 0:
+        return None
+    
+    cyrillic_ratio = cyrillic_count / total_chars
+    
+    if cyrillic_ratio > 0.7:
+        # Кирилиця переважає
+        if ukrainian_chars > 0 and ukrainian_chars / cyrillic_count > 0.1:
+            return 'uk'  # Українська
+        else:
+            return 'ru'  # Російська
+    elif cyrillic_ratio < 0.3:
+        return 'en'  # Англійська (або інша латинська)
+    
+    return 'unknown'
+
+def get_subtitle_preview(subtitle_path: Path, max_lines: int = 3) -> List[str]:
+    """
+    Отримує превʼю перших рядків субтитрів
+    
+    Args:
+        subtitle_path: Шлях до файлу субтитрів
+        max_lines: Максимальна кількість рядків для превʼю
+    
+    Returns:
+        Список текстових рядків
+    """
+    try:
+        with open(subtitle_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except UnicodeDecodeError:
+        # Пробуємо інші кодування
+        for encoding in ['cp1251', 'latin1', 'cp1252']:
+            try:
+                with open(subtitle_path, 'r', encoding=encoding) as f:
                     content = f.read()
                 break
             except UnicodeDecodeError:
                 continue
         else:
-            return ["Помилка читання файлу"]
+            return ["Не вдалося прочитати файл"]
     
-    ext = subtitle_file.suffix.lower()
-    
-    if ext == '.srt':
-        lines = extract_srt_preview(content, max_lines)
-    elif ext in ['.ass', '.ssa']:
-        lines = extract_ass_preview(content, max_lines)
-    elif ext == '.vtt':
-        lines = extract_vtt_preview(content, max_lines)
-    else:
-        # Для інших форматів просто беремо перші рядки
-        lines = content.splitlines()[:max_lines]
-    
-    return [line.strip() for line in lines if line.strip()][:max_lines]
-
-
-def extract_srt_preview(content: str, max_lines: int) -> List[str]:
-    """Витягує превʼю з SRT субтитрів"""
     lines = []
-    current_block = []
     
-    for line in content.splitlines():
-        line = line.strip()
+    if subtitle_path.suffix.lower() == '.srt':
+        # Парсинг SRT
+        pattern = re.compile(r'(\d+)\s+([\d:,]+)\s+-->\s+([\d:,]+)\s+([\s\S]*?)(?=\n\d+\n|\Z)', re.MULTILINE)
+        matches = list(pattern.finditer(content))
         
-        if line == '':
-            if current_block:
-                # Додаємо текст (пропускаємо номер та час)
-                text_lines = current_block[2:] if len(current_block) > 2 else current_block
-                for text_line in text_lines:
-                    clean_text = re.sub(r'<[^>]+>', '', text_line).strip()
-                    if clean_text:
-                        lines.append(clean_text)
+        for match in matches[:max_lines]:
+            text = match.group(4).replace('\n', ' ').strip()
+            text = re.sub(r'\s+', ' ', text)  # Множинні пробіли
+            if text and len(text) > 5:
+                lines.append(text[:100] + ('...' if len(text) > 100 else ''))
+                
+    elif subtitle_path.suffix.lower() in ['.ass', '.ssa']:
+        # Парсинг ASS
+        for line in content.split('\n'):
+            if line.startswith('Dialogue:'):
+                parts = line.split(',', 9)
+                if len(parts) >= 10:
+                    text = parts[9].replace('\\N', ' ').strip()
+                    text = re.sub(r'\{.*?\}', '', text)  # Видаляємо теги
+                    text = re.sub(r'\s+', ' ', text)
+                    if text and len(text) > 5:
+                        lines.append(text[:100] + ('...' if len(text) > 100 else ''))
                         if len(lines) >= max_lines:
-                            return lines
-                current_block = []
-        else:
-            current_block.append(line)
+                            break
     
-    return lines
-
-
-def extract_ass_preview(content: str, max_lines: int) -> List[str]:
-    """Витягує превʼю з ASS/SSA субтитрів"""
-    lines = []
-    
-    for line in content.splitlines():
-        if line.startswith('Dialogue:'):
-            parts = line.split(',', 9)
-            if len(parts) >= 10:
-                text = parts[9].replace('\\N', ' ').replace('\\n', ' ')
-                # Видаляємо теги форматування
-                text = re.sub(r'\{[^}]*\}', '', text).strip()
-                if text and len(text) > 3:
-                    lines.append(text)
-                    if len(lines) >= max_lines:
-                        break
-    
-    return lines
-
-
-def extract_vtt_preview(content: str, max_lines: int) -> List[str]:
-    """Витягує превʼю з VTT субтитрів"""
-    lines = []
-    in_cue = False
-    
-    for line in content.splitlines():
-        line = line.strip()
-        
-        if '-->' in line:
-            in_cue = True
-            continue
-        
-        if in_cue:
-            if line == '':
-                in_cue = False
-            else:
-                # Видаляємо теги VTT
-                clean_text = re.sub(r'<[^>]+>', '', line).strip()
-                if clean_text:
-                    lines.append(clean_text)
-                    if len(lines) >= max_lines:
-                        break
-    
-    return lines
+    return lines[:max_lines] if lines else ["Не вдалося отримати превʼю"]
