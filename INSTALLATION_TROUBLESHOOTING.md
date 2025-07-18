@@ -203,6 +203,20 @@ pip install openai-whisper language-tool-python ffmpeg-python deepl langdetect p
 
 3. **Звертайтеся за допомогою** з повним логом помилки
 
+## Проблеми після установки
+
+### IndentationError при запуску
+**Проблема:** `IndentationError: unindent does not match any outer indentation level`
+
+**Рішення:**
+Це означає, що ваш редактор змінив відступи в Python файлах. Завантажте найновішу версію з GitHub або виконайте:
+```bash
+git pull origin main
+```
+
+### Інші помилки запуску
+Якщо виникають інші помилки при виконанні `python scripts/run_pipeline.py`, створіть issue на GitHub з повним текстом помилки.
+
 ## Перевірка установки
 
 Після успішної установки перевірте:
