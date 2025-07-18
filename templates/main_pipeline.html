@@ -6,16 +6,16 @@
     <title>🎬 MakeMyAnimeUA — Переклад Субтитрів</title>
     <style>
         :root {
-            --primary-color: #1a1a2e;
-            --secondary-color: #16213e;
-            --accent-color: #e94560;
-            --text-color: #ffffff;
-            --text-secondary: #b0b0b0;
-            --success-color: #00d4aa;
-            --warning-color: #ffa500;
+            --primary-color: #000000;
+            --secondary-color: #1a1a1a;
+            --accent-color: #00ff00;
+            --text-color: #ff8c00;
+            --text-secondary: #ff9933;
+            --success-color: #00ff00;
+            --warning-color: #ffaa00;
             --error-color: #ff6b6b;
             --border-color: #333;
-            --background-dark: #0f0f1e;
+            --background-dark: #000000;
         }
 
         * {
@@ -67,12 +67,12 @@
 
         .step-card:hover {
             border-color: var(--accent-color);
-            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.2);
+            box-shadow: 0 5px 20px rgba(0, 255, 0, 0.3);
         }
 
         .step-card.active {
             border-color: var(--success-color);
-            box-shadow: 0 5px 20px rgba(0, 212, 170, 0.2);
+            box-shadow: 0 5px 20px rgba(0, 255, 0, 0.4);
         }
 
         .step-card.disabled {
@@ -115,12 +115,12 @@
 
         .upload-area:hover {
             border-color: var(--accent-color);
-            background: rgba(233, 69, 96, 0.1);
+            background: rgba(0, 255, 0, 0.1);
         }
 
         .upload-area.dragover {
             border-color: var(--success-color);
-            background: rgba(0, 212, 170, 0.1);
+            background: rgba(0, 255, 0, 0.15);
         }
 
         .upload-icon {
@@ -145,17 +145,20 @@
 
         .btn-primary {
             background: var(--accent-color);
-            color: white;
+            color: black;
+            font-weight: 600;
         }
 
         .btn-primary:hover {
-            background: #d63851;
+            background: #00cc00;
             transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
         }
 
         .btn-success {
             background: var(--success-color);
-            color: white;
+            color: black;
+            font-weight: 600;
         }
 
         .btn-success:hover {
@@ -198,7 +201,7 @@
         .form-control:focus {
             outline: none;
             border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+            box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2);
         }
 
         .radio-group {
@@ -219,12 +222,12 @@
 
         .radio-item:hover {
             border-color: var(--accent-color);
-            background: rgba(233, 69, 96, 0.1);
+            background: rgba(0, 255, 0, 0.1);
         }
 
         .radio-item.selected {
             border-color: var(--success-color);
-            background: rgba(0, 212, 170, 0.1);
+            background: rgba(0, 255, 0, 0.15);
         }
 
         .radio-item input[type="radio"] {
@@ -256,9 +259,10 @@
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(45deg, var(--accent-color), var(--success-color));
+            background: linear-gradient(45deg, #00ff00, #00cc00);
             width: 0%;
             transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
         }
 
         .progress-text {
