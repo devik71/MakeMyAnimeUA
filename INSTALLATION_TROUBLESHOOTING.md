@@ -1,19 +1,65 @@
 # Вирішення проблем з установкою
 
-## Проблеми, які можуть виникнути
+## 🚨 НАЙПОШИРЕНІША ПРОБЛЕМА (Windows)
+
+**Якщо ви отримуєте помилку `CMAKE_C_COMPILER not set`:**
+
+1. **Завантажте Visual Studio Community:** https://visualstudio.microsoft.com/vs/community/
+2. **У вікні "Visual Studio Installer":**
+   - Вкладка **"Workloads"** → секція **"Desktop & Mobile"**
+   - Поставте галочку: ✅ **"Desktop development with C++"**
+   - Праворуч переконайтеся, що вибрано: **MSVC**, **Windows SDK**, **CMake tools**
+3. **Перезапустіть комп'ютер**
+4. **Спробуйте установку знову**
+
+Це вирішує 90% проблем з установкою на Windows!
+
+---
+
+## Детальні рішення для різних проблем
 
 ### 1. Помилка з CMake та компіляторами
 
 **Проблема:** `CMAKE_C_COMPILER not set` або `CMAKE_CXX_COMPILER not set`
 
-**Рішення для Windows:**
-```bash
-# Встановити Visual Studio Build Tools
-# Завантажити з: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+**⚠️ ГОЛОВНА ПРИЧИНА НА WINDOWS:** Відсутні Visual Studio Build Tools або C++ Development Tools
 
-# Або встановити через chocolatey
-choco install visualstudio2022buildtools
+**Рішення для Windows (ОБОВ'ЯЗКОВО):**
+
+#### Варіант 1: Visual Studio Community (Рекомендовано)
+1. Завантажте Visual Studio Community: https://visualstudio.microsoft.com/vs/community/
+2. У вікні "Visual Studio Installer":
+   - Перейдіть на вкладку **"Workloads"**
+   - Знайдіть секцію **"Desktop & Mobile"**
+   - Поставте галочку біля: ✅ **"Desktop development with C++"**
+3. Праворуч у колонці "Installation details" переконайтеся, що вибрано:
+   - ✅ **"MSVC v143 - VS 2022 C++ x64/x86 build tools"**
+   - ✅ **"Windows 10 SDK"** (або Windows 11 SDK, якщо є)
+   - ✅ **"C++ CMake tools for Windows"**
+4. Перезапустіть комп'ютер після установки
+
+#### Варіант 2: Тільки Build Tools (мінімальний)
+1. Завантажте Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+2. При установці оберіть:
+   - ✅ **"C++ build tools"**
+   - ✅ **"MSVC v143 - VS 2022 C++ x64/x86 build tools"**
+   - ✅ **"Windows 11 SDK"**
+
+#### Варіант 3: Через chocolatey
+```bash
+# Встановити chocolatey спочатку: https://chocolatey.org/install
+choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools"
 choco install cmake
+```
+
+#### Перевірка установки:
+Відкрийте нову командну строку та виконайте:
+```bash
+cl
+# Має показати версію Microsoft C/C++ Compiler
+
+cmake --version
+# Має показати версію CMake
 ```
 
 **Рішення для Linux:**
