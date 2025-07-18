@@ -42,7 +42,23 @@ for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER, TEMP_AUDIO_FOLDER]:
 processing_sessions = {}
 
 def allowed_file(filename, extensions):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in extensions
+    """Перевіряє чи дозволено розширення файлу"""
+    if not filename or '.' not in filename:
+        return False
+    return filename.rsplit('.', 1)[1].lower() in extensions
+
+def is_valid_video_file(file_path):
+    """Додаткова перевірка чи файл є валідним відео"""
+    try:
+        # Швидка перевірка через ffprobe
+        probe = subprocess.run([
+            "ffprobe", "-v", "error", "-select_streams", "v:0", 
+            "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(file_path)
+        ], capture_output=True, text=True, timeout=10)
+        
+        return probe.returncode == 0 and "video" in probe.stdout
+    except Exception:
+        return False
 
 def get_file_hash(path):
     """Генерує хеш файлу для ідентифікації"""
@@ -58,14 +74,23 @@ def get_file_hash(path):
 def analyze_video(video_path):
     """Аналізує відео файл - аудіо доріжки та субтитри"""
     try:
+        # Перевіряємо чи файл існує
+        if not video_path.exists():
+            return {"error": "Файл не знайдено"}
+            
         # Запускаємо ffprobe для аналізу
         probe = subprocess.run([
             "ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(video_path)
         ], capture_output=True, text=True)
         
         if probe.returncode != 0:
-            return {"error": "Не вдалося проаналізувати відео"}
+            # Детальніша інформація про помилку
+            error_msg = probe.stderr if probe.stderr else "Невалідний відео файл"
+            return {"error": f"Помилка ffprobe: {error_msg}"}
         
+        if not probe.stdout.strip():
+            return {"error": "ffprobe не повернув даних - можливо файл пошкоджений"}
+            
         streams_data = json.loads(probe.stdout)
         audio_streams = []
         subtitle_streams = []
@@ -154,25 +179,54 @@ def index():
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
     """Завантаження відео файлу"""
-    if 'video' not in request.files:
-        return jsonify({"error": "Файл не вибрано"})
-    
-    file = request.files['video']
-    if file.filename == '':
-        return jsonify({"error": "Файл не вибрано"})
-    
-    if file and allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
+    try:
+        # Перевіряємо наявність файлу
+        if 'video' not in request.files:
+            return jsonify({"error": "Файл не вибрано"}), 400
+        
+        file = request.files['video']
+        if file.filename == '':
+            return jsonify({"error": "Файл не вибрано"}), 400
+        
+        # Перевіряємо розмір файлу (max 2GB)
+        if hasattr(file, 'content_length') and file.content_length > 2 * 1024 * 1024 * 1024:
+            return jsonify({"error": "Файл занадто великий (максимум 2GB)"}), 400
+        
+        # Перевіряємо формат файлу
+        if not file or not allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
+            return jsonify({"error": f"Непідтримуваний формат файлу. Підтримувані: {', '.join(ALLOWED_VIDEO_EXTENSIONS)}"}), 400
+        
         # Створюємо унікальну сесію
         session_id = str(uuid.uuid4())
         session['session_id'] = session_id
         
+        # Створюємо папку uploads якщо її немає
+        UPLOAD_FOLDER.mkdir(exist_ok=True)
+        
         # Зберігаємо файл
         filename = secure_filename(file.filename)
         video_path = UPLOAD_FOLDER / f"{session_id}_{filename}"
+        
+        print(f"Зберігаємо файл: {video_path}")
         file.save(video_path)
         
+        # Перевіряємо що файл збережено
+        if not video_path.exists():
+            return jsonify({"error": "Помилка збереження файлу"}), 500
+        
+        print(f"Файл збережено успішно. Розмір: {video_path.stat().st_size} байт")
+        
+        # Додаткова перевірка чи файл є валідним відео
+        print("Перевіряємо валідність відео файлу...")
+        if not is_valid_video_file(video_path):
+            # Видаляємо невалідний файл
+            video_path.unlink(missing_ok=True)
+            return jsonify({"error": "Завантажений файл не є валідним відео файлом. Перевірте формат та цілісність файлу."}), 400
+        
         # Аналізуємо відео
+        print("Починаємо аналіз відео...")
         analysis = analyze_video(video_path)
+        print(f"Аналіз завершено: {analysis}")
         
         # Зберігаємо інформацію про сесію
         processing_sessions[session_id] = {
@@ -188,8 +242,12 @@ def upload_video():
             "whisper_models": get_available_whisper_models(),
             "subtitle_styles": get_available_subtitle_styles()
         })
-    else:
-        return jsonify({"error": "Непідтримуваний формат файлу"})
+        
+    except Exception as e:
+        print(f"Помилка завантаження файлу: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Внутрішня помилка сервера: {str(e)}"}), 500
 
 @app.route('/start_processing', methods=['POST'])
 def start_processing():

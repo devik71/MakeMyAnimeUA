@@ -85,24 +85,97 @@ async function processFileUpload(file) {
     formData.append('video', file);
     
     try {
-        const response = await fetch('/upload', {
+        const response = await fetch('/upload_video', {
             method: 'POST',
             body: formData
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const result = await response.json();
         
-        if (result.success) {
-            currentSessionId = result.session_id;
-            showStep('analysis');
-            analyzeVideo(result.session_id);
-        } else {
-            showError(result.error || 'Помилка завантаження файлу');
+        if (result.error) {
+            showError(result.error);
+            return;
         }
+        
+        // Успішне завантаження
+        currentSessionId = result.session_id;
+        showStep('analysis');
+        populateAnalysisData(result);
     } catch (error) {
         showError('Помилка з\'єднання: ' + error.message);
     } finally {
         hideSpinner();
+    }
+}
+
+/**
+ * Заповнення даних аналізу
+ */
+function populateAnalysisData(data) {
+    // Заповнюємо інформацію про відео
+    const analysisContainer = document.getElementById('analysisResults');
+    if (analysisContainer && data.analysis) {
+        let html = '<h3>📊 Аналіз відео:</h3>';
+        
+        if (data.analysis.video_info) {
+            const info = data.analysis.video_info;
+            html += `<p><strong>Тривалість:</strong> ${info.duration || 'Невідомо'}</p>`;
+            html += `<p><strong>Розмір:</strong> ${info.size || 'Невідомо'}</p>`;
+        }
+        
+        if (data.analysis.audio_streams && data.analysis.audio_streams.length > 0) {
+            html += '<h4>🎵 Аудіо дорожки:</h4><ul>';
+            data.analysis.audio_streams.forEach((stream, index) => {
+                html += `<li>Дорожка ${index}: ${stream.language || 'невідома мова'} (${stream.codec || 'невідомий кодек'})</li>`;
+            });
+            html += '</ul>';
+        }
+        
+        if (data.analysis.subtitle_streams && data.analysis.subtitle_streams.length > 0) {
+            html += '<h4>📝 Субтитри:</h4><ul>';
+            data.analysis.subtitle_streams.forEach((stream, index) => {
+                html += `<li>Субтитри ${index}: ${stream.language || 'невідома мова'}</li>`;
+            });
+            html += '</ul>';
+        }
+        
+        analysisContainer.innerHTML = html;
+    }
+    
+    // Заповнюємо доступні моделі Whisper
+    if (data.whisper_models) {
+        const whisperSelect = document.getElementById('whisperModel');
+        if (whisperSelect) {
+            whisperSelect.innerHTML = '';
+            data.whisper_models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.name;
+                option.textContent = `${model.name} (${model.size})`;
+                if (model.recommended) option.selected = true;
+                whisperSelect.appendChild(option);
+            });
+        }
+    }
+    
+    // Заповнюємо стилі субтитрів
+    if (data.subtitle_styles) {
+        const stylesContainer = document.getElementById('subtitleStyles');
+        if (stylesContainer) {
+            stylesContainer.innerHTML = '';
+            data.subtitle_styles.forEach((style, index) => {
+                const label = document.createElement('label');
+                label.className = 'radio-item';
+                label.innerHTML = `
+                    <input type="radio" name="subtitleStyle" value="${style.name}" ${index === 0 ? 'checked' : ''}>
+                    <span>${style.name}</span>
+                `;
+                stylesContainer.appendChild(label);
+            });
+        }
     }
 }
 
