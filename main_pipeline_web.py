@@ -285,117 +285,123 @@ def start_processing():
     return jsonify({"status": "started"})
 
 def process_video_async(session_id):
-    """Асинхронна обробка відео"""
+    """Асинхронна обробка відео через термінальний пайплайн"""
     try:
         session_data = processing_sessions[session_id]
         config = session_data['config']
         video_path = Path(session_data['video_path'])
         
-        # Крок 1: Витягування аудіо (якщо потрібно)
-        session_data['progress'] = {"step": "audio_extraction", "percent": 10, "message": "Витягування аудіо..."}
+        # Створюємо конфіг-файл для термінального пайплайну
+        config_path = TEMP_AUDIO_FOLDER / f"{session_id}_config.json"
         
-        audio_path = TEMP_AUDIO_FOLDER / f"{session_id}_audio.wav"
-        
-        if config['source_type'] == 'transcribe':
-            Balthasar.extract_audio(video_path, audio_path)
-            session_data['progress'] = {"step": "audio_extraction", "percent": 20, "message": "Аудіо витягнуто"}
-        
-        # Крок 2: Отримання субтитрів
-        if config['source_type'] == 'transcribe':
-            session_data['progress'] = {"step": "transcription", "percent": 30, "message": "Транскрибація..."}
-            
-            result = Balthasar.transcribe(
-                audio_path, 
-                model_name=config.get('whisper_model', 'base'),
-                language=config.get('source_language', 'ru'),
-                device="cuda" if config.get('use_gpu', True) else "cpu"
-            )
-            
-            session_data['progress'] = {"step": "transcription", "percent": 50, "message": "Транскрибація завершена"}
-            
-        elif config['source_type'] == 'embedded':
-            session_data['progress'] = {"step": "subtitle_extraction", "percent": 30, "message": "Витягування субтитрів..."}
-            
-            # Витягуємо вбудовані субтитри
-            stream_index = config['subtitle_stream_index']
-            extracted_path = TEMP_AUDIO_FOLDER / f"{session_id}_subs.srt"
-            
-            subprocess.run([
-                "ffmpeg", "-y", "-i", str(video_path), 
-                "-map", f"0:{stream_index}", "-c", "copy", str(extracted_path)
-            ], check=True)
-            
-            # Парсимо субтитри
-            if extracted_path.suffix.lower() == '.srt':
-                result = parse_srt(extracted_path)
-            else:
-                result = parse_ass(extracted_path)
-                
-            session_data['progress'] = {"step": "subtitle_extraction", "percent": 50, "message": "Субтитри витягнуто"}
-            
-        elif config['source_type'] == 'external':
-            session_data['progress'] = {"step": "subtitle_loading", "percent": 30, "message": "Завантаження субтитрів..."}
-            
-            # Завантажуємо зовнішні субтитри
-            external_path = config['external_subtitle_path']
-            if external_path.endswith('.srt'):
-                result = parse_srt(external_path)
-            else:
-                result = parse_ass(external_path)
-                
-            session_data['progress'] = {"step": "subtitle_loading", "percent": 50, "message": "Субтитри завантажено"}
-        
-        # Крок 3: Переклад
-        session_data['progress'] = {"step": "translation", "percent": 60, "message": "Переклад..."}
-        
-        translated_segments = []
-        total_segments = len(result["segments"])
-        
-        for i, segment in enumerate(result["segments"]):
-            translated_text = Melchior.translate(
-                segment["text"],
-                engine=config.get('translation_engine', 'helsinki'),
-                api_key=config.get('deepl_api_key'),
-                source_lang=config.get('source_language', 'ru'),
-                target_lang=config.get('target_language', 'uk')
-            )
-            
-            translated_segments.append({
-                "start": segment["start"],
-                "end": segment["end"],
-                "original": segment["text"],
-                "translated": translated_text
-            })
-            
-            # Оновлюємо прогрес
-            progress_percent = 60 + (30 * i / total_segments)
-            session_data['progress'] = {
-                "step": "translation", 
-                "percent": int(progress_percent), 
-                "message": f"Переклад {i+1}/{total_segments}"
-            }
-        
-        # Зберігаємо перекладені субтитри
-        translation_data = {
-            "meta": {
-                "video_name": video_path.name,
-                "video_hash": get_file_hash(video_path),
-                "translation_config": config,
-                "created_at": datetime.now().isoformat()
-            },
-            "segments": translated_segments
+        pipeline_config = {
+            "session_id": session_id,
+            "video_path": str(video_path),
+            "output_dir": str(OUTPUT_FOLDER),
+            "temp_dir": str(TEMP_AUDIO_FOLDER),
+            "translation_engine": config.get('translation_engine', 'helsinki'),
+            "source_language": config.get('source_language', 'ru'),
+            "target_language": config.get('target_language', 'uk'),
+            "whisper_model": config.get('whisper_model', 'base'),
+            "use_gpu": config.get('use_gpu', True),
+            "subtitle_style": config.get('subtitle_style', 'magi_pipeline/ass_generator_module/styles/Dialogue.ass'),
+            "deepl_api_key": config.get('deepl_api_key'),
+            "source_type": config.get('source_type', 'transcribe'),
+            "subtitle_stream_index": config.get('subtitle_stream_index'),
+            "external_subtitle_path": config.get('external_subtitle_path'),
+            "web_interface": True
         }
         
-        translation_path = OUTPUT_FOLDER / f"{session_id}_translation.json"
-        with open(translation_path, 'w', encoding='utf-8') as f:
-            json.dump(translation_data, f, ensure_ascii=False, indent=2)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(pipeline_config, f, ensure_ascii=False, indent=2)
         
-        session_data['translation_path'] = str(translation_path)
-        session_data['progress'] = {"step": "translation_complete", "percent": 90, "message": "Переклад завершено"}
-        session_data['status'] = 'translation_ready'
+        # Створюємо лог-файл для моніторингу
+        log_path = TEMP_AUDIO_FOLDER / f"{session_id}_pipeline.log"
+        status_path = TEMP_AUDIO_FOLDER / f"{session_id}_status.json"
+        
+        # Запускаємо термінальний пайплайн
+        session_data['progress'] = {"step": "starting_pipeline", "percent": 5, "message": "Запуск пайплайну..."}
+        
+        # Запускаємо пайплайн у фоновому режимі
+        import subprocess
+        import sys
+        
+        cmd = [
+            sys.executable, 
+            "scripts/run_pipeline.py",
+            "--config", str(config_path),
+            "--session", session_id,
+            "--log", str(log_path),
+            "--status", str(status_path)
+        ]
+        
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(Path(__file__).parent)
+        )
+        
+        session_data['pipeline_process'] = process
+        session_data['log_path'] = str(log_path)
+        session_data['status_path'] = str(status_path)
+        
+        # Запускаємо моніторинг прогресу
+        thread = threading.Thread(target=monitor_pipeline_progress, args=(session_id,))
+        thread.daemon = True
+        thread.start()
         
     except Exception as e:
-        session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка: {str(e)}"}
+        session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка запуску: {str(e)}"}
+        session_data['status'] = 'error'
+
+def monitor_pipeline_progress(session_id):
+    """Моніторинг прогресу термінального пайплайну"""
+    try:
+        session_data = processing_sessions[session_id]
+        status_path = Path(session_data['status_path'])
+        log_path = Path(session_data['log_path'])
+        
+        while True:
+            # Перевіряємо статус-файл
+            if status_path.exists():
+                try:
+                    with open(status_path, 'r', encoding='utf-8') as f:
+                        status_data = json.load(f)
+                    
+                    session_data['progress'] = status_data.get('progress', session_data['progress'])
+                    session_data['status'] = status_data.get('status', session_data['status'])
+                    
+                    # Якщо пайплайн завершився
+                    if status_data.get('status') in ['complete', 'error', 'translation_ready']:
+                        if status_data.get('status') == 'translation_ready':
+                            session_data['translation_path'] = status_data.get('translation_path')
+                        elif status_data.get('status') == 'complete':
+                            session_data['final_ass_path'] = status_data.get('final_ass_path')
+                        break
+                        
+                except Exception as e:
+                    print(f"Помилка читання статусу: {e}")
+            
+            # Перевіряємо чи процес ще працює
+            process = session_data.get('pipeline_process')
+            if process and process.poll() is not None:
+                # Процес завершився
+                if process.returncode == 0:
+                    session_data['progress'] = {"step": "complete", "percent": 100, "message": "Пайплайн завершено"}
+                    session_data['status'] = 'complete'
+                else:
+                    stdout, stderr = process.communicate()
+                    error_msg = stderr if stderr else "Невідома помилка"
+                    session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка пайплайну: {error_msg}"}
+                    session_data['status'] = 'error'
+                break
+            
+            time.sleep(2)  # Перевіряємо кожні 2 секунди
+            
+    except Exception as e:
+        session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка моніторингу: {str(e)}"}
         session_data['status'] = 'error'
 
 def parse_srt(path):

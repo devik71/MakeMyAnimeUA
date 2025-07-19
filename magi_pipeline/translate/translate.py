@@ -5,16 +5,32 @@ translate.py — модуль перекладу субтитрів з росі�
 
 from transformers import MarianMTModel, MarianTokenizer
 import torch
+import os
+import sys
 
 # ↓ 1. Завантаження моделі перекладу
 # Ми використовуємо Helsinki-NLP — одну з найкращих моделей для російсько-українського перекладу
 model_name = "Helsinki-NLP/opus-mt-ru-uk"
 
-# Завантажуємо токенізатор (розбиває речення на токени для обробки)
-tokenizer = MarianTokenizer.from_pretrained(model_name)
+def _download_model_if_needed():
+    try:
+        MarianTokenizer.from_pretrained(model_name)
+        MarianMTModel.from_pretrained(model_name)
+    except Exception as e:
+        print(f"[Helsinki-NLP] Завантаження моделі... ({model_name})")
+        MarianTokenizer.from_pretrained(model_name, force_download=True)
+        MarianMTModel.from_pretrained(model_name, force_download=True)
+        print(f"[Helsinki-NLP] Модель завантажено!")
 
-# Завантажуємо саму модель
-model = MarianMTModel.from_pretrained(model_name)
+# Спроба завантажити модель, якщо її ще немає
+try:
+    tokenizer = MarianTokenizer.from_pretrained(model_name)
+    model = MarianMTModel.from_pretrained(model_name)
+except (OSError, ValueError):
+    print(f"[Helsinki-NLP] Модель не знайдена у кеші. Спроба завантажити...")
+    _download_model_if_needed()
+    tokenizer = MarianTokenizer.from_pretrained(model_name)
+    model = MarianMTModel.from_pretrained(model_name)
 
 # Автоматичний вибір CPU чи GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
