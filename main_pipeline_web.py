@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 🎬 MakeMyAnimeUA — Головний веб-інтерфейс для перекладу субтитрів
+Оновлено з новою системою API та безпечною конфігурацією
 """
 
 import os
@@ -16,27 +17,46 @@ import uuid
 from datetime import datetime
 import threading
 import time
+import logging
 
 # Додаємо шлях до модулів
 sys.path.append(str(Path(__file__).resolve().parent))
+from magi_pipeline.config import get_config, setup_logging
 from magi_pipeline.utils.balthasar import Balthasar
 from magi_pipeline.utils.melchior import Melchior
 from magi_pipeline.utils.caspar import Caspar
 from magi_pipeline.utils.external_subs import find_external_subtitles, get_subtitle_preview
+from magi_pipeline.api.translation_api import create_translation_api
+
+# Налаштовуємо логування
+logger = setup_logging()
+
+# Отримуємо конфігурацію
+config = get_config()
+
+# Перевіряємо конфігурацію
+warnings = config.validate_config()
+for warning_type, message in warnings.items():
+    logger.warning(f"{warning_type}: {message}")
 
 app = Flask(__name__)
-app.secret_key = 'magi_pipeline_secret_key_2024'
+app.secret_key = config.flask_secret_key
 
-# Конфігурація
-UPLOAD_FOLDER = Path("uploads")
-OUTPUT_FOLDER = Path("output") 
-TEMP_AUDIO_FOLDER = Path("temp_audio")
+# Конфігурація з нової системи
+UPLOAD_FOLDER = Path(config.upload_folder)
+OUTPUT_FOLDER = Path(config.output_folder)
+TEMP_AUDIO_FOLDER = Path(config.temp_audio_folder)
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'mkv', 'avi', 'mov'}
 ALLOWED_SUBTITLE_EXTENSIONS = {'srt', 'ass', 'ssa', 'vtt'}
 
 # Створюємо необхідні папки
 for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER, TEMP_AUDIO_FOLDER]:
     folder.mkdir(exist_ok=True)
+    logger.info(f"Папка створена/перевірена: {folder}")
+
+# Ініціалізуємо API перекладу
+translation_api = create_translation_api()
+logger.info(f"Доступні движки перекладу: {translation_api.get_available_engines()}")
 
 # Глобальний словник для зберігання стану сесій
 processing_sessions = {}
@@ -194,9 +214,11 @@ def upload_video():
         if file.filename == '':
             return jsonify({"error": "Файл не вибрано"}), 400
         
-        # Перевіряємо розмір файлу (max 2GB)
-        if hasattr(file, 'content_length') and file.content_length > 2 * 1024 * 1024 * 1024:
-            return jsonify({"error": "Файл занадто великий (максимум 2GB)"}), 400
+        # Перевіряємо розмір файлу
+        max_size = config.max_file_size
+        if hasattr(file, 'content_length') and file.content_length > max_size:
+            max_size_mb = max_size // (1024 * 1024)
+            return jsonify({"error": f"Файл занадто великий (максимум {max_size_mb}MB)"}), 400
         
         # Перевіряємо формат файлу
         if not file or not allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
@@ -213,26 +235,29 @@ def upload_video():
         filename = secure_filename(file.filename)
         video_path = UPLOAD_FOLDER / f"{session_id}_{filename}"
         
-        print(f"Зберігаємо файл: {video_path}")
+        logger.info(f"Зберігаємо файл: {video_path}")
         file.save(video_path)
         
         # Перевіряємо що файл збережено
         if not video_path.exists():
+            logger.error("Помилка збереження файлу")
             return jsonify({"error": "Помилка збереження файлу"}), 500
         
-        print(f"Файл збережено успішно. Розмір: {video_path.stat().st_size} байт")
+        file_size = video_path.stat().st_size
+        logger.info(f"Файл збережено успішно. Розмір: {file_size} байт")
         
         # Додаткова перевірка чи файл є валідним відео
-        print("Перевіряємо валідність відео файлу...")
+        logger.info("Перевіряємо валідність відео файлу...")
         if not is_valid_video_file(video_path):
             # Видаляємо невалідний файл
             video_path.unlink(missing_ok=True)
+            logger.warning("Файл не є валідним відео")
             return jsonify({"error": "Завантажений файл не є валідним відео файлом. Перевірте формат та цілісність файлу."}), 400
         
         # Аналізуємо відео
-        print("Починаємо аналіз відео...")
+        logger.info("Починаємо аналіз відео...")
         analysis = analyze_video(video_path)
-        print(f"Аналіз завершено: {analysis}")
+        logger.info(f"Аналіз завершено успішно")
         
         # Зберігаємо інформацію про сесію
         processing_sessions[session_id] = {
@@ -250,9 +275,7 @@ def upload_video():
         })
         
     except Exception as e:
-        print(f"Помилка завантаження файлу: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Помилка завантаження файлу: {e}", exc_info=True)
         return jsonify({"error": f"Внутрішня помилка сервера: {str(e)}"}), 500
 
 @app.route('/start_processing', methods=['POST'])
@@ -343,12 +366,16 @@ def process_video_async(session_id):
         total_segments = len(result["segments"])
         
         for i, segment in enumerate(result["segments"]):
+            # Використовуємо нову систему перекладу
+            engine = config.get('translation_engine', 'auto')
+            source_lang = config.get('source_language', 'ru')
+            target_lang = config.get('target_language', 'uk')
+            
             translated_text = Melchior.translate(
                 segment["text"],
-                engine=config.get('translation_engine', 'helsinki'),
-                api_key=config.get('deepl_api_key'),
-                source_lang=config.get('source_language', 'ru'),
-                target_lang=config.get('target_language', 'uk')
+                engine=engine,
+                source_lang=source_lang,
+                target_lang=target_lang
             )
             
             translated_segments.append({
@@ -386,6 +413,7 @@ def process_video_async(session_id):
         session_data['status'] = 'translation_ready'
         
     except Exception as e:
+        logger.error(f"Помилка обробки відео: {e}", exc_info=True)
         session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка: {str(e)}"}
         session_data['status'] = 'error'
 
@@ -522,6 +550,7 @@ def generate_final_subtitles_async(session_id):
         session_data['status'] = 'complete'
         
     except Exception as e:
+        logger.error(f"Помилка генерації субтитрів: {e}", exc_info=True)
         session_data['progress'] = {"step": "error", "percent": 0, "message": f"Помилка генерації: {str(e)}"}
         session_data['status'] = 'error'
 
@@ -539,6 +568,18 @@ def download_subtitles():
     return send_file(session_data['final_ass_path'], as_attachment=True)
 
 if __name__ == '__main__':
-    print("🚀 Запуск MakeMyAnimeUA - Головний пайплайн")
-    print("📍 http://localhost:5001")
-    app.run(debug=True, port=5001, host='0.0.0.0')
+    logger.info("🚀 Запуск MakeMyAnimeUA - Головний пайплайн")
+    logger.info(f"📍 http://{config.host}:{config.port}")
+    
+    # Показуємо інформацію про конфігурацію
+    logger.info(f"Режим налагодження: {config.debug_mode}")
+    logger.info(f"Доступні движки перекладу: {translation_api.get_available_engines()}")
+    
+    if config.debug_mode:
+        logger.warning("⚠️ Увага: запуск у режимі налагодження!")
+    
+    app.run(
+        debug=config.debug_mode, 
+        port=config.port, 
+        host=config.host
+    )
