@@ -1,18 +1,58 @@
-import deepl
-import os
+"""
+ЗАСТАРІЛИЙ МОДУЛЬ - використовуйте magi_pipeline.api.deepl_api
+Цей файл залишено для зворотної сумісності
+"""
 
-DEEPL_API_KEY = "427c0788-2c8d-494c-84b8-403e7c7baa08:fx"  # Зручно зберігати ключ у змінній середовища
+import logging
+import warnings
+from typing import Optional
 
-def deepl_translate(text, target_lang="UK", source_lang=None):
-    if not DEEPL_API_KEY:
-        raise ValueError("DEEPL_API_KEY is not set in environment variables!")
-    translator = deepl.Translator(DEEPL_API_KEY)
-    kwargs = {"target_lang": target_lang}
-    if source_lang:
-        # DeepL очікує коди мов: 'RU' для російської, 'EN' для англійської
-        if source_lang == "ru":
-            kwargs["source_lang"] = "RU"
-        elif source_lang == "en":
-            kwargs["source_lang"] = "EN"
-    result = translator.translate_text(text, **kwargs)
-    return result.text
+from ..api.deepl_api import create_deepl_api
+
+logger = logging.getLogger(__name__)
+
+# Попередження про застарілість
+warnings.warn(
+    "magi_pipeline.translate.deepl_translate застарів. "
+    "Використовуйте magi_pipeline.api.deepl_api",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+
+def deepl_translate(text: str, target_lang: str = "UK", source_lang: Optional[str] = None) -> str:
+    """
+    ЗАСТАРІЛА ФУНКЦІЯ - використовуйте DeepLAPI.translate_text()
+    
+    Args:
+        text: Текст для перекладу
+        target_lang: Цільова мова
+        source_lang: Вихідна мова
+        
+    Returns:
+        Перекладений текст
+        
+    Raises:
+        ValueError: Якщо API недоступний
+    """
+    logger.warning("Використовується застаріла функція deepl_translate()")
+    
+    deepl_api = create_deepl_api()
+    
+    if not deepl_api.is_available():
+        raise ValueError("DeepL API недоступний! Встановіть DEEPL_API_KEY у змінних середовища.")
+    
+    result = deepl_api.translate_text(
+        text=text,
+        target_lang=target_lang,
+        source_lang=source_lang
+    )
+    
+    if result is None:
+        raise RuntimeError("Помилка перекладу DeepL")
+    
+    return result
+
+
+# Для зворотної сумісності
+DEEPL_API_KEY = None  # Більше не використовуєтьсяeturn result.text
